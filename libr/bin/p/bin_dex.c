@@ -706,12 +706,6 @@ static bool check_bytes(const ut8 *buf, ut64 length) {
 	return false;
 }
 
-static bool check(RBinFile *arch) {
-	const ut8 *bytes = arch ? r_buf_buffer (arch->buf) : NULL;
-	ut64 sz = arch ? r_buf_size (arch->buf): 0;
-	return check_bytes (bytes, sz);
-}
-
 static RBinInfo *info(RBinFile *arch) {
 	RBinHash *h;
 	RBinInfo *ret = R_NEW0 (RBinInfo);
@@ -724,7 +718,12 @@ static RBinInfo *info(RBinFile *arch) {
 	ret->bclass = r_bin_dex_get_version (arch->o->bin_obj);
 	ret->rclass = strdup ("class");
 	ret->os = strdup ("linux");
-	ret->subsystem = strdup ("any");
+	const char *kw = "Landroid/support/wearable/view";
+	if (r_mem_mem (arch->buf->buf, arch->buf->length, kw, strlen (kw))) {
+		ret->subsystem = strdup ("android-wear");
+	} else {
+		ret->subsystem = strdup ("android");
+	}
 	ret->machine = strdup ("Dalvik VM");
 	h = &ret->sum[0];
 	h->type = "sha1";
@@ -1881,7 +1880,6 @@ RBinPlugin r_bin_plugin_dex = {
 	.get_sdb = &get_sdb,
 	.load = &load,
 	.load_bytes = load_bytes,
-	.check = check,
 	.check_bytes = check_bytes,
 	.baddr = baddr,
 	.entries = entries,

@@ -31,18 +31,6 @@ static bool checkHeader(const ut8 *h, int sz) {
 	return false;
 }
 
-static bool check(RBin *bin) {
-	int ret = false;
-	RMmap *m = r_file_mmap (bin->file, false, 0);
-	if (!m || !m->buf) {
-		r_file_mmap_free (m);
-		return false;
-	}
-	ret = checkHeader (m->buf, m->len);
-	r_file_mmap_free (m);
-	return ret;
-}
-
 static bool check_bytes(const ut8* bytes, ut64 sz) {
 	if (!bytes || sz < 0x300) {
 		return false;
@@ -187,7 +175,6 @@ static RList * oneshotall(RBin *bin, const ut8 *buf, ut64 size) {
 	res = r_list_newf (r_bin_xtrdata_free);
 	r_list_append (res, data);
 	for (i = 1; data && i < narch; i++) {
-		data = NULL;
 		data = oneshot (bin, buf, size, i);
 		r_list_append (res, data);
 	}
@@ -199,7 +186,6 @@ RBinXtrPlugin r_bin_xtr_plugin_fatmach0 = {
 	.name = "fatmach0",
 	.desc = "fat mach0 bin extractor plugin",
 	.license = "LGPL3",
-	.check = &check,
 	.load = &load,
 	.size = &size,
 	.extract = &extract,

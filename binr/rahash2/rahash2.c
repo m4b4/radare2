@@ -316,14 +316,12 @@ static void algolist() {
 			printf ("  %s\n", name);
 		}
 	}
-	eprintf ("\n");
-	eprintf ("Available Encoders/Decoders: \n");
+	eprintf ("\nAvailable Encoders/Decoders: \n");
 	// TODO: do not hardcode
 	printf ("  base64\n");
 	printf ("  base91\n");
 	printf ("  punycode\n");
-	eprintf ("\n");
-	eprintf ("Available Crypto Algos: \n");
+	eprintf ("\nAvailable Crypto Algos: \n");
 	for (i = 0;; i++) {
 		bits = ((ut64) 1) << i;
 		const char *name = r_crypto_name (bits);

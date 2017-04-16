@@ -423,6 +423,11 @@ static RList* symbols(RBinFile *arch) {
 		ptr->type = r_str_const (symbol[i].type);
 		ptr->paddr = paddr;
 		ptr->vaddr = vaddr;
+		//special case where there is not entry in the plt for the import
+		if (ptr->vaddr == UT32_MAX) {
+			ptr->paddr = 0;
+			ptr->vaddr = 0;
+		}
 		ptr->size = symbol[i].size;
 		ptr->ordinal = symbol[i].ordinal;
 		setsymord (bin, ptr->ordinal, ptr);
@@ -892,12 +897,6 @@ static bool check_bytes(const ut8 *buf, ut64 length) {
 		&& buf[4] != 2;
 }
 
-static bool check(RBinFile *arch) {
-	const ut8 *bytes = arch ? r_buf_buffer (arch->buf) : NULL;
-	ut64 sz = arch ? r_buf_size (arch->buf): 0;
-	return check_bytes (bytes, sz);
-}
-
 extern struct r_bin_dbginfo_t r_bin_dbginfo_elf;
 extern struct r_bin_write_t r_bin_write_elf;
 
@@ -1004,7 +1003,6 @@ RBinPlugin r_bin_plugin_elf = {
 	.load = &load,
 	.load_bytes = &load_bytes,
 	.destroy = &destroy,
-	.check = &check,
 	.check_bytes = &check_bytes,
 	.baddr = &baddr,
 	.boffset = &boffset,

@@ -13,14 +13,7 @@ static bool check_bytes(const ut8 *buf, ut64 length) {
 	return (buf && length >= 4 && !memcmp (buf, R_BIN_WASM_MAGIC_BYTES, 4));
 }
 
-static bool check(RBinFile *arch) {
-	const ut8 *bytes = arch? r_buf_buffer (arch->buf): NULL;
-	ut64 sz = arch? r_buf_size (arch->buf): 0;
-	return check_bytes (bytes, sz);
-}
-
 static void *load_bytes(RBinFile *arch, const ut8 *buf, ut64 sz, ut64 loadaddr, Sdb *sdb){
-
 	if (!buf || !sz || sz == UT64_MAX) {
 		return NULL;
 	}
@@ -28,7 +21,6 @@ static void *load_bytes(RBinFile *arch, const ut8 *buf, ut64 sz, ut64 loadaddr, 
 		return NULL;
 	}
 	return r_bin_wasm_init (arch);
-
 }
 
 static bool load(RBinFile *arch) {
@@ -57,59 +49,50 @@ static RBinAddr *binsym(RBinFile *arch, int type) {
 static RList *sections(RBinFile *arch);
 
 static RList *entries(RBinFile *arch) {
-
 	RBinWasmObj *bin = arch && arch->o ? arch->o->bin_obj : NULL;
-
-    // TODO
-    RList *ret;
-    RBinAddr *ptr = NULL;
+	// TODO
+	RList *ret;
+	RBinAddr *ptr = NULL;
 	ut64 addr = 0x0;
 
-    if (!(ret = r_list_newf ((RListFree)free))) {
-        return NULL;
-    }
-
-	if (!(addr = (ut64) r_bin_wasm_get_entrypoint (bin))) {
+	if (!(ret = r_list_newf ((RListFree)free))) {
 		return NULL;
 	}
-
-    if ((ptr = R_NEW0 (RBinAddr))) {
-        ptr->paddr = addr;
-        ptr->vaddr = addr;
-        r_list_append (ret, ptr);
-    }
-    return ret;
+	if (!(addr = (ut64) r_bin_wasm_get_entrypoint (bin))) {
+		r_list_free (ret);
+		return NULL;
+	}
+	if ((ptr = R_NEW0 (RBinAddr))) {
+		ptr->paddr = addr;
+		ptr->vaddr = addr;
+		r_list_append (ret, ptr);
+	}
+	return ret;
 }
 
 static RList *sections(RBinFile *arch) {
-
 	RBinWasmObj *bin = arch && arch->o ? arch->o->bin_obj : NULL;
-
 	RList *ret = NULL;
 	RList *secs = NULL;
-    RBinSection *ptr = NULL;
+	RBinSection *ptr = NULL;
 	RBinWasmSection *sec;
 
 	if (!(ret = r_list_newf ((RListFree)free))) {
 		return NULL;
 	}
-
 	if (!(secs = r_bin_wasm_get_sections (bin))) {
+		r_list_free (ret);
 		return NULL;
 	}
-
 	RListIter *iter;
 	r_list_foreach (secs, iter, sec) {
-
 		if (!(ptr = R_NEW0 (RBinSection))) {
 			break;
 		}
-
 		strncpy (ptr->name, (char*)sec->name, R_BIN_SIZEOF_STRINGS);
 		if (sec->id == R_BIN_WASM_SECTION_DATA || sec->id == R_BIN_WASM_SECTION_MEMORY) {
 			ptr->is_data = true;
 		}
-
 		ptr->size = sec->payload_len;
 		ptr->vsize = sec->payload_len;
 		ptr->vaddr = sec->offset;
@@ -117,42 +100,35 @@ static RList *sections(RBinFile *arch) {
 		ptr->add = true;
 		// TODO permissions
 		ptr->srwx = 0;
-
 		r_list_append (ret, ptr);
-	
 	}
-
 	return ret;
-
 }
 
 static RList *symbols(RBinFile *arch) {
-
 	RBinWasmObj *bin;
-    RList *ret, *codes, *imports;
-    RBinSymbol *ptr = NULL;
+	RList *ret, *codes, *imports;
+	RBinSymbol *ptr = NULL;
 
 	if (!arch || !arch->o || !arch->o->bin_obj) {
 		return NULL;
 	}
 	bin = arch->o->bin_obj;
-
 	if (!(ret = r_list_newf ((RListFree)free))) {
 		return NULL;
 	}
-
 	if (!(codes = r_bin_wasm_get_codes (bin))) {
+		free (ret);
 		return NULL;
 	}
-
 	if (!(imports = r_bin_wasm_get_imports (bin))) {
+		free (ret);
 		return NULL;
 	}
-
-	RListIter *iter;
-	ut32 i = 0;
 	
+	ut32 i = 0;
 	RBinWasmImportEntry *imp;
+	RListIter *iter;
 	r_list_foreach (imports, iter, imp) {
 		if (!(ptr = R_NEW0 (RBinSymbol))) {
 			break;
@@ -197,13 +173,10 @@ static RList *symbols(RBinFile *arch) {
 
 	// TODO: use custom section "name" if present
 	// TODO: exports, globals, tables and memories
-
 	return ret;
-
 }
 
 static RList *imports(RBinFile *arch) {
-
 	RBinWasmObj *bin = NULL;
 	RList *imports = NULL;
 	RBinImport *ptr = NULL;
@@ -213,20 +186,17 @@ static RList *imports(RBinFile *arch) {
 		return NULL;
 	}
 	bin = arch->o->bin_obj;
-
 	if (!(ret = r_list_newf (r_bin_import_free))) {
 		return NULL;
 	}
-
 	if (!(imports = r_bin_wasm_get_imports (bin))) {
 		r_list_free (ret);
 		return NULL;
 	}
 
-	RListIter *iter = NULL;
 	RBinWasmImportEntry *import = NULL;
 	ut32 i = 0;
-
+	RListIter *iter;
 	r_list_foreach (imports, iter, import) {
 		if (!(ptr = R_NEW0 (RBinImport))) {
 			break;
@@ -251,9 +221,7 @@ static RList *imports(RBinFile *arch) {
 		}
 		r_list_append (ret, ptr);
 	}
-
 	return ret;
-
 }
 
 static RList *libs(RBinFile *arch) {
@@ -283,14 +251,12 @@ static RBinInfo *info(RBinFile *arch) {
 }
 
 static ut64 size(RBinFile *arch) {
-
 	if (!arch->o->info) {
 		arch->o->info = info (arch);
 	}
 	if (!arch->o->info) {
 		return 0;
 	}
-
 	return arch->buf->length;
 }
 
@@ -312,7 +278,6 @@ RBinPlugin r_bin_plugin_wasm = {
 	.load_bytes = &load_bytes,
 	.size = &size,
 	.destroy = &destroy,
-	.check = &check,
 	.check_bytes = &check_bytes,
 	.baddr = &baddr,
 	.binsym = &binsym,
