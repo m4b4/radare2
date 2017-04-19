@@ -556,18 +556,32 @@ R_API bool r_file_dump(const char *file, const ut8 *buf, int len, int append) {
 }
 
 R_API bool r_file_rm(const char *file) {
+#if __WINDOWS__
+	bool ret = false;
+	wchar_t *wfile = r_utf8_to_utf16 (file);
+	if ((wfile = r_utf8_to_utf16 (file))) {
+		return false;
+	}
+#endif
 	if (r_sandbox_enable (0)) {
+#if __WINDOWS__
+		free (wfile);
+#endif
 		return false;
 	}
 	if (r_file_is_directory (file)) {
 #if __WINDOWS__
-		return !RemoveDirectory (file);
+		ret = RemoveDirectoryW (wfile);
+		free (wfile);
+		return ret;
 #else
 		return !rmdir (file);
 #endif
 	} else {
 #if __WINDOWS__
-		return !DeleteFile (file);
+		ret = DeleteFileW (wfile);
+		free (wfile);
+		return ret;
 #else
 		return !unlink (file);
 #endif
@@ -597,12 +611,17 @@ R_API int r_file_mmap_write(const char *file, ut64 addr, const ut8 *buf, int len
 #if __WINDOWS__
 	HANDLE fh;
 	DWORD written = 0;
-	if (r_sandbox_enable (0)) return -1;
-	fh = CreateFile (file, GENERIC_READ|GENERIC_WRITE,
+	wchar_t *wfile = r_utf8_to_utf16 (file);
+	if (r_sandbox_enable (0)) {
+		free (wfile);
+		return -1;
+	}
+	fh = CreateFileW (wfile, GENERIC_READ|GENERIC_WRITE,
 		FILE_SHARE_READ | FILE_SHARE_WRITE,
 		NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
 	if (fh == INVALID_HANDLE_VALUE) {
 		r_sys_perror ("r_file_mmap_write: CreateFile");
+		free (wfile);
 		return -1;
 	}
 	SetFilePointer (fh, addr, NULL, FILE_BEGIN);
@@ -611,6 +630,7 @@ R_API int r_file_mmap_write(const char *file, ut64 addr, const ut8 *buf, int len
 		len = -1;
 	}
 	CloseHandle (fh);
+	free (wfile);
 	return len;
 #elif __UNIX__
 	int fd = r_sandbox_open (file, O_RDWR|O_SYNC, 0644);
@@ -640,26 +660,34 @@ R_API int r_file_mmap_write(const char *file, ut64 addr, const ut8 *buf, int len
 R_API int r_file_mmap_read (const char *file, ut64 addr, ut8 *buf, int len) {
 #if __WINDOWS__
 	HANDLE fm, fh;
-	if (r_sandbox_enable (0)) {
+	wchar_t *wfile;
+	if (!(wfile = r_utf8_to_utf16 (file))) {
 		return -1;
 	}
-	fh = CreateFile (file, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, 0);
+	if (r_sandbox_enable (0)) {
+		free (wfile);
+		return -1;
+	}
+	fh = CreateFileW (wfile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, 0);
 	if (fh == INVALID_HANDLE_VALUE) {
 		r_sys_perror ("CreateFile");
+		free (wfile);
 		return -1;
 	}
-	fm = CreateFileMapping (fh, NULL, PAGE_READONLY, 0, 0, NULL);
+	fm = CreateFileMappingW (fh, NULL, PAGE_READONLY, 0, 0, NULL);
 	if (fm != INVALID_HANDLE_VALUE) {
 		ut8 *obuf = MapViewOfFile (fm, FILE_MAP_READ, 0, 0, len);
 		memcpy (obuf, buf, len);
 		UnmapViewOfFile (obuf);
 	} else {
 		r_sys_perror ("CreateFileMapping");
+		free (wfile);
 		CloseHandle (fh);
 		return -1;
 	}
 	CloseHandle (fh);
 	CloseHandle (fm);
+	free (wfile);
 	return len;
 #elif __UNIX__
 	int fd = r_sandbox_open (file, O_RDONLY, 0644);
@@ -817,10 +845,26 @@ R_API char *r_file_temp (const char *prefix) {
 R_API int r_file_mkstemp(const char *prefix, char **oname) {
 	int h;
 	char *path = r_file_tmpdir ();
+#if __UNIX__
 	char name[1024];
+#endif
 #if __WINDOWS__
+	char *name;
+	wchar_t *wpath;
+	wchar_t *wprefix;
+	wchar_t wname[1024 * sizeof (wchar_t)];
 	h = -1;
-	if (GetTempFileName (path, prefix, 0, name)) {
+	if (!(wpath = r_utf8_to_utf16 (path)) || !(wprefix = r_utf8_to_utf16 (prefix))) {
+		free (wpath);
+		free (wprefix);
+		return h;
+	}
+	if (GetTempFileNameW (wpath, wprefix, 0, wname)) {
+		if (!(name = r_utf16_to_utf8 (wname))) {
+			free (wpath);
+			free (wprefix);
+			return h;
+		}
 		h = r_sandbox_open (name, O_RDWR|O_EXCL|O_BINARY, 0644);
 	}
 #else
@@ -833,6 +877,11 @@ R_API int r_file_mkstemp(const char *prefix, char **oname) {
 	if (oname) {
 		*oname = (h!=-1)? strdup (name): NULL;
 	}
+#if __WINDOWS__
+	free (wpath);
+	free (wprefix);
+	free (name);
+#endif
 	free (path);
 	return h;
 }
