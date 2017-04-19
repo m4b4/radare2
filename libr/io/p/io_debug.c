@@ -79,7 +79,7 @@ static int setup_tokens() {
 		goto err_enable;
 
         tp.PrivilegeCount = 1;
-        if (!LookupPrivilegeValue (NULL,  SE_DEBUG_NAME, &tp.Privileges[0].Luid))
+        if (!LookupPrivilegeValueW (NULL,  SE_DEBUG_NAME, &tp.Privileges[0].Luid))
 		goto err_enable;
 
         //tp.Privileges[0].Attributes = enable ? SE_PRIVILEGE_ENABLED : 0;
@@ -99,6 +99,8 @@ static int fork_and_ptraceme(RIO *io, int bits, const char *cmd) {
         DEBUG_EVENT de;
 	int pid, tid;
 	HANDLE th = INVALID_HANDLE_VALUE;
+	wchar_t *appname;
+	wchar_t *wcmdline;
 	if (!*cmd) return -1;
 	setup_tokens ();
 	char *_cmd = io->args ? r_str_appendf (strdup (cmd), " %s", io->args) :
@@ -143,13 +145,22 @@ static int fork_and_ptraceme(RIO *io, int bits, const char *cmd) {
 	}
 	cmdline[cmd_i] = '\0';
 
-        if (!CreateProcess (argv[0], cmdline, NULL, NULL, FALSE,
+	if (!(appname = r_utf8_to_utf16 (argv[0])) || !(wcmdline = r_utf8_to_utf16 (cmdline))) {
+		free (appname);
+		free (wcmdline);
+		return -1;
+	}
+        if (!CreateProcessW (appname, wcmdline, NULL, NULL, FALSE,
 			CREATE_NEW_CONSOLE | DEBUG_ONLY_THIS_PROCESS,
 			NULL, NULL, &si, &pi)) {
+		free (wcmdline);
+		free (appname);
 		r_sys_perror ("CreateProcess");
 		return -1;
         }
 	free (cmdline);
+	free (wcmdline);
+	free (appname);
 	r_str_argv_free (argv);
         /* get process id and thread id */
         pid = pi.dwProcessId;
